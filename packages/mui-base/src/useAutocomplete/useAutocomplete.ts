@@ -8,16 +8,19 @@ import {
   unstable_useId as useId,
   usePreviousProps,
 } from '@mui/utils';
+import { CreateFilterOptionsConfig, FilterOptionsState } from './useAutocomplete.types';
 
 // https://stackoverflow.com/questions/990904/remove-accents-diacritics-in-a-string-in-javascript
 // Give up on IE11 support for this feature
-function stripDiacritics(string) {
+function stripDiacritics(string: string) {
   return typeof string.normalize !== 'undefined'
     ? string.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     : string;
 }
 
-export function createFilterOptions(config = {}) {
+export function createFilterOptions<Value>(
+  config: CreateFilterOptionsConfig<Value> = {},
+): (options: Value[], state: FilterOptionsState<Value>) => Value[] {
   const {
     ignoreAccents = true,
     ignoreCase = true,
@@ -57,7 +60,7 @@ export function createFilterOptions(config = {}) {
 }
 
 // To replace with .findIndex() once we stop IE11 support.
-function findIndex(array, comp) {
+function findIndex<T>(array: T[], comp: (val: T) => boolean) {
   for (let i = 0; i < array.length; i += 1) {
     if (comp(array[i])) {
       return i;
@@ -72,7 +75,7 @@ const defaultFilterOptions = createFilterOptions();
 // Number of options to jump in list box when `Page Up` and `Page Down` keys are used.
 const pageSize = 5;
 
-const defaultIsActiveElementInListbox = (listboxRef) =>
+const defaultIsActiveElementInListbox = (listboxRef: React.MutableRefObject<HTMLElement>) =>
   listboxRef.current !== null && listboxRef.current.parentElement?.contains(document.activeElement);
 
 export function useAutocomplete(props) {
