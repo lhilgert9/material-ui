@@ -2,13 +2,27 @@ import * as React from 'react';
 import { expect } from 'chai';
 import { createRenderer, screen, ErrorBoundary, act, fireEvent } from '@mui-internal/test-utils';
 import { spy } from 'sinon';
-import { useAutocomplete, createFilterOptions } from '@mui/base/useAutocomplete';
+import {
+  useAutocomplete,
+  createFilterOptions,
+  UseAutocompleteProps,
+} from '@mui/base/useAutocomplete';
+
+interface TestValue {
+  id: string;
+  name: string;
+}
 
 describe('useAutocomplete', () => {
   const { render } = createRenderer();
 
   it('should preserve DOM nodes of options when re-ordering', () => {
-    function Test(props) {
+    function Test<
+      Multiple extends boolean | undefined = false,
+      DisableClearable extends boolean | undefined = false,
+      FreeSolo extends boolean | undefined = false,
+      GroupBy extends ((option: string) => string) | undefined = undefined,
+    >(props: UseAutocompleteProps<string, Multiple, DisableClearable, FreeSolo>) {
       const { options } = props;
       const {
         groupedOptions,
@@ -51,9 +65,9 @@ describe('useAutocomplete', () => {
 
   describe('createFilterOptions', () => {
     it('defaults to getOptionLabel for text filtering', () => {
-      const filterOptions = createFilterOptions();
+      const filterOptions = createFilterOptions<TestValue>();
 
-      const getOptionLabel = (option) => option.name;
+      const getOptionLabel = (option: TestValue) => option.name;
       const options = [
         {
           id: '1234',
@@ -75,19 +89,19 @@ describe('useAutocomplete', () => {
     });
 
     it('filters without error with empty option set', () => {
-      const filterOptions = createFilterOptions();
+      const filterOptions = createFilterOptions<TestValue>();
 
-      const getOptionLabel = (option) => option.name;
-      const options = [];
+      const getOptionLabel = (option: TestValue) => option.name;
+      const options: TestValue[] = [];
 
       expect(filterOptions(options, { inputValue: 'a', getOptionLabel })).to.deep.equal([]);
     });
 
     describe('option: limit', () => {
       it('limits the number of suggested options to be shown', () => {
-        const filterOptions = createFilterOptions({ limit: 2 });
+        const filterOptions = createFilterOptions<TestValue>({ limit: 2 });
 
-        const getOptionLabel = (option) => option.name;
+        const getOptionLabel = (option: TestValue) => option.name;
         const options = [
           {
             id: '1234',
@@ -115,12 +129,12 @@ describe('useAutocomplete', () => {
     });
 
     describe('option: matchFrom', () => {
-      let filterOptions;
-      let getOptionLabel;
-      let options;
+      let filterOptions: ReturnType<typeof createFilterOptions<TestValue>>;
+      let getOptionLabel: (option: TestValue) => string;
+      let options: TestValue[];
       beforeEach(() => {
         filterOptions = createFilterOptions({ matchFrom: 'any' });
-        getOptionLabel = (option) => option.name;
+        getOptionLabel = (option: TestValue) => option.name;
         options = [
           {
             id: '1234',
@@ -166,9 +180,9 @@ describe('useAutocomplete', () => {
 
     describe('option: ignoreAccents', () => {
       it('does not ignore accents', () => {
-        const filterOptions = createFilterOptions({ ignoreAccents: false });
+        const filterOptions = createFilterOptions<TestValue>({ ignoreAccents: false });
 
-        const getOptionLabel = (option) => option.name;
+        const getOptionLabel = (option: TestValue) => option.name;
         const options = [
           {
             id: '1234',
@@ -197,9 +211,9 @@ describe('useAutocomplete', () => {
 
     describe('option: ignoreCase', () => {
       it('matches results with case insensitive', () => {
-        const filterOptions = createFilterOptions({ ignoreCase: false });
+        const filterOptions = createFilterOptions<TestValue>({ ignoreCase: false });
 
-        const getOptionLabel = (option) => option.name;
+        const getOptionLabel = (option: TestValue) => option.name;
         const options = [
           {
             id: '1234',
@@ -235,7 +249,12 @@ describe('useAutocomplete', () => {
       this.skip();
     }
 
-    function Test(props) {
+    function Test<
+      Multiple extends boolean | undefined = false,
+      DisableClearable extends boolean | undefined = false,
+      FreeSolo extends boolean | undefined = false,
+      GroupBy extends ((option: string) => string) | undefined = undefined,
+    >(props: UseAutocompleteProps<string, Multiple, DisableClearable, FreeSolo>) {
       const { options } = props;
       const {
         groupedOptions,
@@ -299,14 +318,19 @@ describe('useAutocomplete', () => {
 
   describe('prop: freeSolo', () => {
     it('should not reset if the component value does not change on blur', () => {
-      function Test(props) {
+      function Test<
+        Multiple extends boolean | undefined = false,
+        DisableClearable extends boolean | undefined = false,
+        FreeSolo extends boolean | undefined = false,
+        GroupBy extends ((option: string) => string) | undefined = undefined,
+      >(props: UseAutocompleteProps<string, Multiple, DisableClearable, FreeSolo>) {
         const { options } = props;
         const { getInputProps } = useAutocomplete({ options, open: true, freeSolo: true });
 
         return <input {...getInputProps()} />;
       }
       render(<Test options={['foo', 'bar']} />);
-      const input = screen.getByRole('combobox');
+      const input = screen.getByRole('combobox') as HTMLInputElement;
 
       act(() => {
         fireEvent.change(input, { target: { value: 'free' } });
@@ -319,7 +343,12 @@ describe('useAutocomplete', () => {
 
   describe('getInputProps', () => {
     it('should disable input element', () => {
-      function Test(props) {
+      function Test<
+        Multiple extends boolean | undefined = false,
+        DisableClearable extends boolean | undefined = false,
+        FreeSolo extends boolean | undefined = false,
+        GroupBy extends ((option: string) => string) | undefined = undefined,
+      >(props: UseAutocompleteProps<string, Multiple, DisableClearable, FreeSolo>) {
         const { options } = props;
         const { getInputProps } = useAutocomplete({ options, disabled: true });
 
@@ -339,7 +368,7 @@ describe('useAutocomplete', () => {
       const { getClearProps, getInputProps } = useAutocomplete({
         defaultValue,
         disableClearable: false,
-        getOptionLabel: ([val]) => val,
+        getOptionLabel: ([val]: string[]) => val,
         isOptionEqualToValue: (option, value) => {
           if (option === value) {
             return true;
