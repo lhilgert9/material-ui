@@ -8,7 +8,12 @@ import {
   unstable_useId as useId,
   usePreviousProps,
 } from '@mui/utils';
-import { CreateFilterOptionsConfig, FilterOptionsState } from './useAutocomplete.types';
+import {
+  CreateFilterOptionsConfig,
+  FilterOptionsState,
+  UseAutocompleteProps,
+  UseAutocompleteReturnValue,
+} from './useAutocomplete.types';
 
 // https://stackoverflow.com/questions/990904/remove-accents-diacritics-in-a-string-in-javascript
 // Give up on IE11 support for this feature
@@ -77,8 +82,25 @@ const pageSize = 5;
 
 const defaultIsActiveElementInListbox = (listboxRef: React.MutableRefObject<HTMLElement>) =>
   listboxRef.current !== null && listboxRef.current.parentElement?.contains(document.activeElement);
-
-export function useAutocomplete(props) {
+/**
+ *
+ * Demos:
+ *
+ * - [Autocomplete](https://mui.com/base-ui/react-autocomplete/#hook)
+ *
+ * API:
+ *
+ * - [useAutocomplete API](https://mui.com/base-ui/react-autocomplete/hooks-api/#use-autocomplete)
+ */
+export function useAutocomplete<
+  Value,
+  Multiple extends boolean | undefined = false,
+  DisableClearable extends boolean | undefined = false,
+  FreeSolo extends boolean | undefined = false,
+  GroupBy extends ((option: Value) => string) | undefined = undefined,
+>(
+  props: UseAutocompleteProps<Value, Multiple, DisableClearable, FreeSolo, GroupBy>,
+): UseAutocompleteReturnValue<Value, Multiple, DisableClearable, FreeSolo, GroupBy> {
   const {
     // eslint-disable-next-line @typescript-eslint/naming-convention
     unstable_isActiveElementInListbox = defaultIsActiveElementInListbox,
