@@ -8,16 +8,31 @@ import {
   unstable_useId as useId,
   usePreviousProps,
 } from '@mui/utils';
+import {
+  AutocompleteChangeDetails,
+  AutocompleteChangeReason,
+  AutocompleteCloseReason,
+  AutocompleteFreeSoloValueMapping,
+  AutocompleteGroupedOption,
+  AutocompleteHighlightChangeReason,
+  AutocompleteValue,
+  CreateFilterOptionsConfig,
+  FilterOptionsState,
+  UseAutocompleteProps,
+  UseAutocompleteReturnValue,
+} from './useAutocomplete.types';
 
 // https://stackoverflow.com/questions/990904/remove-accents-diacritics-in-a-string-in-javascript
 // Give up on IE11 support for this feature
-function stripDiacritics(string) {
+function stripDiacritics(string: string) {
   return typeof string.normalize !== 'undefined'
     ? string.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     : string;
 }
 
-export function createFilterOptions(config = {}) {
+export function createFilterOptions<Value>(
+  config: CreateFilterOptionsConfig<Value> = {},
+): (options: Value[], state: FilterOptionsState<Value>) => Value[] {
   const {
     ignoreAccents = true,
     ignoreCase = true,
@@ -57,7 +72,7 @@ export function createFilterOptions(config = {}) {
 }
 
 // To replace with .findIndex() once we stop IE11 support.
-function findIndex(array, comp) {
+function findIndex<T>(array: T[], comp: (val: T) => boolean) {
   for (let i = 0; i < array.length; i += 1) {
     if (comp(array[i])) {
       return i;
@@ -72,10 +87,28 @@ const defaultFilterOptions = createFilterOptions();
 // Number of options to jump in list box when `Page Up` and `Page Down` keys are used.
 const pageSize = 5;
 
-const defaultIsActiveElementInListbox = (listboxRef) =>
+const defaultIsActiveElementInListbox = (listboxRef: React.MutableRefObject<HTMLUListElement>) =>
   listboxRef.current !== null && listboxRef.current.parentElement?.contains(document.activeElement);
 
-export function useAutocomplete(props) {
+/**
+ *
+ * Demos:
+ *
+ * - [Autocomplete](https://mui.com/base-ui/react-autocomplete/#hook)
+ *
+ * API:
+ *
+ * - [useAutocomplete API](https://mui.com/base-ui/react-autocomplete/hooks-api/#use-autocomplete)
+ */
+export function useAutocomplete<
+  Value,
+  Multiple extends boolean = false,
+  DisableClearable extends boolean = false,
+  FreeSolo extends boolean = false,
+  GroupBy extends ((option: Value) => string) | undefined = undefined
+>(
+  props: UseAutocompleteProps<Value, Multiple, DisableClearable, FreeSolo, GroupBy>,
+): UseAutocompleteReturnValue<Value, Multiple, DisableClearable, FreeSolo, GroupBy> {
   const {
     // eslint-disable-next-line @typescript-eslint/naming-convention
     unstable_isActiveElementInListbox = defaultIsActiveElementInListbox,
@@ -88,25 +121,31 @@ export function useAutocomplete(props) {
     clearOnBlur = !props.freeSolo,
     clearOnEscape = false,
     componentName = 'useAutocomplete',
-    defaultValue = props.multiple ? [] : null,
+    defaultValue = (props.multiple ? [] : null) as AutocompleteValue<
+      Value,
+      Multiple,
+      DisableClearable,
+      FreeSolo
+    >,
     disableClearable = false,
     disableCloseOnSelect = false,
     disabled: disabledProp,
     disabledItemsFocusable = false,
     disableListWrap = false,
-    filterOptions = defaultFilterOptions,
+    filterOptions = defaultFilterOptions as ReturnType<typeof createFilterOptions<Value>>,
     filterSelectedOptions = false,
     freeSolo = false,
     getOptionDisabled,
     getOptionKey,
-    getOptionLabel: getOptionLabelProp = (option) => option.label ?? option,
+    getOptionLabel: getOptionLabelProp = ((option: any) => option.label ?? option) as (
+      option: Value | AutocompleteFreeSoloValueMapping<FreeSolo>,
+    ) => string,
     groupBy,
     handleHomeEndKeys = !props.freeSolo,
     id: idProp,
     includeInputInList = false,
     inputValue: inputValueProp,
     isOptionEqualToValue = (option, value) => option === value,
-    multiple = false,
     onChange,
     onClose,
     onHighlightChange,
@@ -119,8 +158,9 @@ export function useAutocomplete(props) {
     selectOnFocus = !props.freeSolo,
     value: valueProp,
   } = props;
+  const multiple = props.multiple;
 
-  const id = useId(idProp);
+  const id = useId(idProp)!;
 
   let getOptionLabel = getOptionLabelProp;
 
@@ -143,9 +183,9 @@ export function useAutocomplete(props) {
 
   const ignoreFocus = React.useRef(false);
   const firstFocus = React.useRef(true);
-  const inputRef = React.useRef(null);
-  const listboxRef = React.useRef(null);
-  const [anchorEl, setAnchorEl] = React.useState(null);
+  const inputRef = React.useRef<HTMLInputElement>(null!);
+  const listboxRef = React.useRef<HTMLUListElement>(null!);
+  const [anchorEl, setAnchorEl] = React.useState<HTMLElement | null>(null);
 
   const [focusedTag, setFocusedTag] = React.useState(-1);
   const defaultHighlighted = autoHighlight ? 0 : -1;
@@ -166,10 +206,16 @@ export function useAutocomplete(props) {
   const [focused, setFocused] = React.useState(false);
 
   const resetInputValue = React.useCallback(
-    (event, newValue) => {
+    (
+      event: React.SyntheticEvent,
+      newValue: AutocompleteValue<Value, Multiple, DisableClearable, FreeSolo>,
+    ) => {
       // retain current `inputValue` if new option isn't selected and `clearOnBlur` is false
       // When `multiple` is enabled, `newValue` is an array of all selected items including the newly selected item
-      const isOptionSelected = multiple ? value.length < newValue.length : newValue !== null;
+      const isOptionSelected = multiple
+        ? (value as AutocompleteValue<Value, true, DisableClearable, FreeSolo>).length <
+          (newValue as AutocompleteValue<Value, true, DisableClearable, FreeSolo>).length
+        : newValue !== null;
       if (!isOptionSelected && !clearOnBlur) {
         return;
       }
@@ -179,7 +225,9 @@ export function useAutocomplete(props) {
       } else if (newValue == null) {
         newInputValue = '';
       } else {
-        const optionLabel = getOptionLabel(newValue);
+        const optionLabel = getOptionLabel(
+          newValue as AutocompleteValue<Value, false, true, FreeSolo>,
+        );
         newInputValue = typeof optionLabel === 'string' ? optionLabel : '';
       }
 
@@ -206,7 +254,9 @@ export function useAutocomplete(props) {
   const [inputPristine, setInputPristine] = React.useState(true);
 
   const inputValueIsSelectedValue =
-    !multiple && value != null && inputValue === getOptionLabel(value);
+    !multiple &&
+    value != null &&
+    inputValue === getOptionLabel(value as AutocompleteValue<Value, false, true, FreeSolo>);
 
   const popupOpen = open && !readOnly;
 
@@ -215,9 +265,10 @@ export function useAutocomplete(props) {
         options.filter((option) => {
           if (
             filterSelectedOptions &&
-            (multiple ? value : [value]).some(
-              (value2) => value2 !== null && isOptionEqualToValue(option, value2),
-            )
+            (multiple
+              ? (value as AutocompleteValue<Value, true, DisableClearable, FreeSolo>)
+              : [value as AutocompleteValue<Value, false, DisableClearable, FreeSolo>]
+            ).some((value2) => value2 !== null && isOptionEqualToValue(option, value2 as Value))
           ) {
             return false;
           }
@@ -250,15 +301,19 @@ export function useAutocomplete(props) {
       return;
     }
 
-    resetInputValue(null, value);
+    resetInputValue(null as any, value);
   }, [value, resetInputValue, focused, previousProps.value, freeSolo]);
 
   const listboxAvailable = open && filteredOptions.length > 0 && !readOnly;
 
   if (process.env.NODE_ENV !== 'production') {
     if (value !== null && !freeSolo && options.length > 0) {
-      const missingValue = (multiple ? value : [value]).filter(
-        (value2) => !options.some((option) => isOptionEqualToValue(option, value2)),
+      const missingValue = (
+        multiple
+          ? (value as AutocompleteValue<Value, true, DisableClearable, FreeSolo>)
+          : [value as AutocompleteValue<Value, false, DisableClearable, FreeSolo>]
+      ).filter(
+        (value2) => !options.some((option) => isOptionEqualToValue(option, value2 as Value)),
       );
 
       if (missingValue.length > 0) {
@@ -281,19 +336,22 @@ export function useAutocomplete(props) {
     if (tagToFocus === -1) {
       inputRef.current.focus();
     } else {
-      anchorEl.querySelector(`[data-tag-index="${tagToFocus}"]`).focus();
+      anchorEl?.querySelector<HTMLElement>(`[data-tag-index="${tagToFocus}"]`)?.focus();
     }
   });
 
   // Ensure the focusedTag is never inconsistent
   React.useEffect(() => {
-    if (multiple && focusedTag > value.length - 1) {
+    if (
+      multiple &&
+      focusedTag > (value as AutocompleteValue<Value, true, DisableClearable, FreeSolo>).length - 1
+    ) {
       setFocusedTag(-1);
       focusTag(-1);
     }
   }, [value, multiple, focusedTag, focusTag]);
 
-  function validOptionIndex(index, direction) {
+  function validOptionIndex(index: number, direction: 'next' | 'previous') {
     if (!listboxRef.current || index < 0 || index >= filteredOptions.length) {
       return -1;
     }
@@ -301,7 +359,9 @@ export function useAutocomplete(props) {
     let nextFocus = index;
 
     while (true) {
-      const option = listboxRef.current.querySelector(`[data-option-index="${nextFocus}"]`);
+      const option = listboxRef.current.querySelector<HTMLLIElement & { disabled?: boolean }>(
+        `[data-option-index="${nextFocus}"]`,
+      );
 
       // Same logic as MenuList.js
       const nextFocusDisabled = disabledItemsFocusable
@@ -329,85 +389,107 @@ export function useAutocomplete(props) {
     }
   }
 
-  const setHighlightedIndex = useEventCallback(({ event, index, reason = 'auto' }) => {
-    highlightedIndexRef.current = index;
+  const setHighlightedIndex = useEventCallback(
+    ({
+      event,
+      index,
+      reason = 'auto',
+    }: {
+      event?: React.SyntheticEvent;
+      index: number;
+      reason?: AutocompleteHighlightChangeReason;
+    }) => {
+      highlightedIndexRef.current = index;
 
-    // does the index exist?
-    if (index === -1) {
-      inputRef.current.removeAttribute('aria-activedescendant');
-    } else {
-      inputRef.current.setAttribute('aria-activedescendant', `${id}-option-${index}`);
-    }
-
-    if (onHighlightChange) {
-      onHighlightChange(event, index === -1 ? null : filteredOptions[index], reason);
-    }
-
-    if (!listboxRef.current) {
-      return;
-    }
-
-    const prev = listboxRef.current.querySelector(
-      `[role="option"].${unstable_classNamePrefix}-focused`,
-    );
-    if (prev) {
-      prev.classList.remove(`${unstable_classNamePrefix}-focused`);
-      prev.classList.remove(`${unstable_classNamePrefix}-focusVisible`);
-    }
-
-    let listboxNode = listboxRef.current;
-    if (listboxRef.current.getAttribute('role') !== 'listbox') {
-      listboxNode = listboxRef.current.parentElement.querySelector('[role="listbox"]');
-    }
-
-    // "No results"
-    if (!listboxNode) {
-      return;
-    }
-
-    if (index === -1) {
-      listboxNode.scrollTop = 0;
-      return;
-    }
-
-    const option = listboxRef.current.querySelector(`[data-option-index="${index}"]`);
-
-    if (!option) {
-      return;
-    }
-
-    option.classList.add(`${unstable_classNamePrefix}-focused`);
-    if (reason === 'keyboard') {
-      option.classList.add(`${unstable_classNamePrefix}-focusVisible`);
-    }
-
-    // Scroll active descendant into view.
-    // Logic copied from https://www.w3.org/WAI/content-assets/wai-aria-practices/patterns/combobox/examples/js/select-only.js
-    // In case of mouse clicks and touch (in mobile devices) we avoid scrolling the element and keep both behaviors same.
-    // Consider this API instead once it has a better browser support:
-    // .scrollIntoView({ scrollMode: 'if-needed', block: 'nearest' });
-    if (
-      listboxNode.scrollHeight > listboxNode.clientHeight &&
-      reason !== 'mouse' &&
-      reason !== 'touch'
-    ) {
-      const element = option;
-
-      const scrollBottom = listboxNode.clientHeight + listboxNode.scrollTop;
-      const elementBottom = element.offsetTop + element.offsetHeight;
-      if (elementBottom > scrollBottom) {
-        listboxNode.scrollTop = elementBottom - listboxNode.clientHeight;
-      } else if (
-        element.offsetTop - element.offsetHeight * (groupBy ? 1.3 : 0) <
-        listboxNode.scrollTop
-      ) {
-        listboxNode.scrollTop = element.offsetTop - element.offsetHeight * (groupBy ? 1.3 : 0);
+      // does the index exist?
+      if (index === -1) {
+        inputRef.current.removeAttribute('aria-activedescendant');
+      } else {
+        inputRef.current.setAttribute('aria-activedescendant', `${id}-option-${index}`);
       }
-    }
-  });
+
+      if (onHighlightChange) {
+        onHighlightChange(event!, index === -1 ? null : filteredOptions[index], reason);
+      }
+
+      if (!listboxRef.current) {
+        return;
+      }
+
+      const prev = listboxRef.current.querySelector(
+        `[role="option"].${unstable_classNamePrefix}-focused`,
+      );
+      if (prev) {
+        prev.classList.remove(`${unstable_classNamePrefix}-focused`);
+        prev.classList.remove(`${unstable_classNamePrefix}-focusVisible`);
+      }
+
+      let listboxNode = listboxRef.current;
+      if (listboxRef.current.getAttribute('role') !== 'listbox') {
+        listboxNode = listboxRef.current.parentElement!.querySelector('[role="listbox"]')!;
+      }
+
+      // "No results"
+      if (!listboxNode) {
+        return;
+      }
+
+      if (index === -1) {
+        listboxNode.scrollTop = 0;
+        return;
+      }
+
+      const option = listboxRef.current.querySelector<HTMLLIElement>(
+        `[data-option-index="${index}"]`,
+      );
+
+      if (!option) {
+        return;
+      }
+
+      option.classList.add(`${unstable_classNamePrefix}-focused`);
+      if (reason === 'keyboard') {
+        option.classList.add(`${unstable_classNamePrefix}-focusVisible`);
+      }
+
+      // Scroll active descendant into view.
+      // Logic copied from https://www.w3.org/WAI/content-assets/wai-aria-practices/patterns/combobox/examples/js/select-only.js
+      // In case of mouse clicks and touch (in mobile devices) we avoid scrolling the element and keep both behaviors same.
+      // Consider this API instead once it has a better browser support:
+      // .scrollIntoView({ scrollMode: 'if-needed', block: 'nearest' });
+      if (
+        listboxNode.scrollHeight > listboxNode.clientHeight &&
+        reason !== 'mouse' &&
+        reason !== 'touch'
+      ) {
+        const element = option;
+
+        const scrollBottom = listboxNode.clientHeight + listboxNode.scrollTop;
+        const elementBottom = element.offsetTop + element.offsetHeight;
+        if (elementBottom > scrollBottom) {
+          listboxNode.scrollTop = elementBottom - listboxNode.clientHeight;
+        } else if (
+          element.offsetTop - element.offsetHeight * (groupBy ? 1.3 : 0) <
+          listboxNode.scrollTop
+        ) {
+          listboxNode.scrollTop = element.offsetTop - element.offsetHeight * (groupBy ? 1.3 : 0);
+        }
+      }
+    },
+  );
 
   const changeHighlightedIndex = useEventCallback(
-    ({ event, diff, direction = 'next', reason = 'auto' }) => {
+    ({
+      event,
+      diff,
+      direction = 'next',
+      reason = 'auto',
+    }: {
+      event?: React.SyntheticEvent;
+      diff: 'reset' | 'start' | 'end' | number;
+      direction?: 'next' | 'previous';
+      reason?: AutocompleteHighlightChangeReason;
+    }) => {
       if (!popupOpen) {
         return;
       }
@@ -479,7 +561,10 @@ export function useAutocomplete(props) {
   );
 
   const checkHighlightedOptionExists = () => {
-    const isSameValue = (value1, value2) => {
+    const isSameValue = (
+      value1: AutocompleteValue<Value, false, DisableClearable, FreeSolo>,
+      value2: AutocompleteValue<Value, false, DisableClearable, FreeSolo>,
+    ) => {
       const label1 = value1 ? getOptionLabel(value1) : '';
       const label2 = value2 ? getOptionLabel(value2) : '';
       return label1 === label2;
@@ -491,9 +576,19 @@ export function useAutocomplete(props) {
       previousProps.filteredOptions.length !== filteredOptions.length &&
       previousProps.inputValue === inputValue &&
       (multiple
-        ? value.length === previousProps.value.length &&
-          previousProps.value.every((val, i) => getOptionLabel(value[i]) === getOptionLabel(val))
-        : isSameValue(previousProps.value, value))
+        ? (value as AutocompleteValue<Value, true, DisableClearable, FreeSolo>).length ===
+            (previousProps.value as AutocompleteValue<Value, true, DisableClearable, FreeSolo>)
+              .length &&
+          (previousProps.value as AutocompleteValue<Value, true, DisableClearable, FreeSolo>).every(
+            (val, i) =>
+              getOptionLabel(
+                (value as AutocompleteValue<Value, true, DisableClearable, FreeSolo>)[i],
+              ) === getOptionLabel(val),
+          )
+        : isSameValue(
+            previousProps.value as AutocompleteValue<Value, false, DisableClearable, FreeSolo>,
+            value as AutocompleteValue<Value, false, DisableClearable, FreeSolo>,
+          ))
     ) {
       const previousHighlightedOption = previousProps.filteredOptions[highlightedIndexRef.current];
 
@@ -521,7 +616,9 @@ export function useAutocomplete(props) {
       return;
     }
 
-    const valueItem = multiple ? value[0] : value;
+    const valueItem = multiple
+      ? (value as AutocompleteValue<Value, true, DisableClearable, FreeSolo>)[0]
+      : value;
 
     // The popup is empty, reset
     if (filteredOptions.length === 0 || valueItem == null) {
@@ -541,13 +638,15 @@ export function useAutocomplete(props) {
       if (
         multiple &&
         currentOption &&
-        findIndex(value, (val) => isOptionEqualToValue(currentOption, val)) !== -1
+        findIndex(value as AutocompleteValue<Value, true, DisableClearable, FreeSolo>, (val) =>
+          isOptionEqualToValue(currentOption, val as Value),
+        ) !== -1
       ) {
         return;
       }
 
       const itemIndex = findIndex(filteredOptions, (optionItem) =>
-        isOptionEqualToValue(optionItem, valueItem),
+        isOptionEqualToValue(optionItem, valueItem as Value),
       );
       if (itemIndex === -1) {
         changeHighlightedIndex({ diff: 'reset' });
@@ -624,7 +723,7 @@ export function useAutocomplete(props) {
     syncHighlightedIndex();
   }, [syncHighlightedIndex]);
 
-  const handleOpen = (event) => {
+  const handleOpen = (event: React.SyntheticEvent) => {
     if (open) {
       return;
     }
@@ -637,7 +736,7 @@ export function useAutocomplete(props) {
     }
   };
 
-  const handleClose = (event, reason) => {
+  const handleClose = (event: React.SyntheticEvent, reason: AutocompleteCloseReason) => {
     if (!open) {
       return;
     }
@@ -649,9 +748,21 @@ export function useAutocomplete(props) {
     }
   };
 
-  const handleValue = (event, newValue, reason, details) => {
+  const handleValue = (
+    event: React.SyntheticEvent,
+    newValue: AutocompleteValue<Value, Multiple, DisableClearable, FreeSolo>,
+    reason: AutocompleteChangeReason,
+    details: AutocompleteChangeDetails<Value>,
+  ) => {
     if (multiple) {
-      if (value.length === newValue.length && value.every((val, i) => val === newValue[i])) {
+      if (
+        (value as AutocompleteValue<Value, true, DisableClearable, FreeSolo>).length ===
+          (newValue as AutocompleteValue<Value, true, DisableClearable, FreeSolo>).length &&
+        (value as AutocompleteValue<Value, true, DisableClearable, FreeSolo>).every(
+          (val, i) =>
+            val === (newValue as AutocompleteValue<Value, true, DisableClearable, FreeSolo>)[i],
+        )
+      ) {
         return;
       }
     } else if (value === newValue) {
@@ -667,9 +778,14 @@ export function useAutocomplete(props) {
 
   const isTouch = React.useRef(false);
 
-  const selectNewValue = (event, option, reasonProp = 'selectOption', origin = 'options') => {
+  const selectNewValue = (
+    event: React.SyntheticEvent,
+    option: Value,
+    reasonProp = 'selectOption',
+    origin = 'options',
+  ) => {
     let reason = reasonProp;
-    let newValue = option;
+    let newValue: Value | Value[] = option;
 
     if (multiple) {
       newValue = Array.isArray(value) ? value.slice() : [];
@@ -697,9 +813,17 @@ export function useAutocomplete(props) {
       }
     }
 
-    resetInputValue(event, newValue);
+    resetInputValue(
+      event,
+      newValue as AutocompleteValue<Value, Multiple, DisableClearable, FreeSolo>,
+    );
 
-    handleValue(event, newValue, reason, { option });
+    handleValue(
+      event,
+      newValue as AutocompleteValue<Value, Multiple, DisableClearable, FreeSolo>,
+      reason,
+      { option },
+    );
     if (!disableCloseOnSelect && (!event || (!event.ctrlKey && !event.metaKey))) {
       handleClose(event, reason);
     }
@@ -713,7 +837,7 @@ export function useAutocomplete(props) {
     }
   };
 
-  function validTagIndex(index, direction) {
+  function validTagIndex(index: number, direction: 'next' | 'previous') {
     if (index === -1) {
       return -1;
     }
@@ -729,7 +853,9 @@ export function useAutocomplete(props) {
         return -1;
       }
 
-      const option = anchorEl.querySelector(`[data-tag-index="${nextFocus}"]`);
+      const option = anchorEl?.querySelector<HTMLLIElement & { disabled?: boolean }>(
+        `[data-tag-index="${nextFocus}"]`,
+      );
 
       // Same logic as MenuList.js
       if (
@@ -931,7 +1057,7 @@ export function useAutocomplete(props) {
     }
   };
 
-  const handleFocus = (event) => {
+  const handleFocus = (event: React.SyntheticEvent) => {
     setFocused(true);
 
     if (openOnFocus && !ignoreFocus.current) {
@@ -939,7 +1065,7 @@ export function useAutocomplete(props) {
     }
   };
 
-  const handleBlur = (event) => {
+  const handleBlur = (event: React.SyntheticEvent) => {
     // Ignore the event when using the scrollbar with IE11
     if (unstable_isActiveElementInListbox(listboxRef)) {
       inputRef.current.focus();
@@ -953,7 +1079,7 @@ export function useAutocomplete(props) {
     if (autoSelect && highlightedIndexRef.current !== -1 && popupOpen) {
       selectNewValue(event, filteredOptions[highlightedIndexRef.current], 'blur');
     } else if (autoSelect && freeSolo && inputValue !== '') {
-      selectNewValue(event, inputValue, 'blur', 'freeSolo');
+      selectNewValue(event, inputValue as Value, 'blur', 'freeSolo');
     } else if (clearOnBlur) {
       resetInputValue(event, value);
     }
@@ -1047,7 +1173,7 @@ export function useAutocomplete(props) {
     if (
       selectOnFocus &&
       firstFocus.current &&
-      inputRef.current.selectionEnd - inputRef.current.selectionStart === 0
+      inputRef.current.selectionEnd! - inputRef.current.selectionStart! === 0
     ) {
       inputRef.current.select();
     }
@@ -1062,9 +1188,9 @@ export function useAutocomplete(props) {
   };
 
   let dirty = freeSolo && inputValue.length > 0;
-  dirty = dirty || (multiple ? value.length > 0 : value !== null);
+  dirty = dirty || (multiple ? (value as AutocompleteValue<Value, true, DisableClearable, FreeSolo>).length > 0 : value !== null);
 
-  let groupedOptions = filteredOptions;
+  let groupedOptions: GroupBy extends (option: Value) => string ? AutocompleteGroupedOption<Value>[] : Value[];
   if (groupBy) {
     // used to keep track of key and indexes in the result array
     const indexBy = new Map();
@@ -1096,11 +1222,13 @@ export function useAutocomplete(props) {
       }
 
       return acc;
-    }, []);
+    }, [] as AutocompleteGroupedOption<Value>[]) as GroupBy extends (option: Value) => string ? AutocompleteGroupedOption<Value>[] : Value[];
+  } else {
+    groupedOptions = filteredOptions as GroupBy extends (option: Value) => string ? AutocompleteGroupedOption<Value>[] : Value[];
   }
 
   if (disabledProp && focused) {
-    handleBlur();
+    handleBlur({} as React.SyntheticEvent);
   }
 
   return {
@@ -1124,7 +1252,7 @@ export function useAutocomplete(props) {
       onMouseDown: handleInputMouseDown,
       // if open then this is handled imperatively so don't let react override
       // only have an opinion about this when closed
-      'aria-activedescendant': popupOpen ? '' : null,
+      'aria-activedescendant': popupOpen ? '' : undefined,
       'aria-autocomplete': autoComplete ? 'both' : 'list',
       'aria-controls': listboxAvailable ? `${id}-listbox` : undefined,
       'aria-expanded': listboxAvailable,
@@ -1186,11 +1314,11 @@ export function useAutocomplete(props) {
     inputValue,
     value,
     dirty,
-    expanded: popupOpen && anchorEl,
+    expanded: Boolean(popupOpen && anchorEl),
     popupOpen,
     focused: focused || focusedTag !== -1,
     anchorEl,
-    setAnchorEl,
+    setAnchorEl: setAnchorEl as () => void,
     focusedTag,
     groupedOptions,
   };

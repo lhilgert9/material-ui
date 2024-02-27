@@ -31,9 +31,10 @@ export type AutocompleteValue<Value, Multiple, DisableClearable, FreeSolo> = Mul
 
 export interface UseAutocompleteProps<
   Value,
-  Multiple extends boolean | undefined,
-  DisableClearable extends boolean | undefined,
-  FreeSolo extends boolean | undefined,
+  Multiple extends boolean = false,
+  DisableClearable extends boolean = false,
+  FreeSolo extends boolean = false,
+  GroupBy extends ((option: Value) => string) | undefined = undefined
 > {
   /**
    * @internal The prefix of the state class name, temporary for Joy UI
@@ -177,7 +178,7 @@ export interface UseAutocompleteProps<
    * @param {Value} options The options to group.
    * @returns {string}
    */
-  groupBy?: (option: Value) => string;
+  groupBy?: GroupBy
 
   /**
    * If `true`, the component handles the "Home" and "End" keys when the popup is open.
@@ -302,9 +303,9 @@ export interface UseAutocompleteProps<
 
 export interface UseAutocompleteParameters<
   Value,
-  Multiple extends boolean | undefined,
-  DisableClearable extends boolean | undefined,
-  FreeSolo extends boolean | undefined,
+  Multiple extends boolean = false,
+  DisableClearable extends boolean = false,
+  FreeSolo extends boolean = false,
 > extends UseAutocompleteProps<Value, Multiple, DisableClearable, FreeSolo> {}
 
 export type AutocompleteHighlightChangeReason = 'keyboard' | 'mouse' | 'auto' | 'touch';
@@ -344,6 +345,7 @@ export interface UseAutocompleteReturnValue<
   Multiple extends boolean | undefined = false,
   DisableClearable extends boolean | undefined = false,
   FreeSolo extends boolean | undefined = false,
+  GroupBy extends ((option: Value) => string) | undefined = undefined,
 > {
   /**
    * Resolver for the root slot's props.
@@ -434,5 +436,5 @@ export interface UseAutocompleteReturnValue<
   /**
    * The options to render. It's either `Value[]` or `AutocompleteGroupedOption<Value>[]` if the groupBy prop is provided.
    */
-  groupedOptions: Value[] | Array<AutocompleteGroupedOption<Value>>;
+  groupedOptions: GroupBy extends (option: Value) => string ? Array<AutocompleteGroupedOption<Value>> : Value[];
 }
