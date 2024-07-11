@@ -1,3 +1,3 @@
 'use client';
-export { useAutocomplete } from './useAutocomplete';
+export { useAutocomplete, createFilterOptions } from './useAutocomplete';
 export * from './useAutocomplete.types';
