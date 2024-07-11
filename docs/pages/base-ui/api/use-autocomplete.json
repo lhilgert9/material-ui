@@ -99,15 +99,15 @@
     "inputValue": { "type": { "name": "string", "description": "string" } },
     "isOptionEqualToValue": {
       "type": {
-        "name": "(option: Value, value: Value) =&gt; boolean",
-        "description": "(option: Value, value: Value) =&gt; boolean"
+        "name": "(option: Value | AutocompleteFreeSoloValueMapping&lt;FreeSolo&gt;, value: Value | AutocompleteFreeSoloValueMapping&lt;FreeSolo&gt;) =&gt; boolean",
+        "description": "(option: Value | AutocompleteFreeSoloValueMapping&lt;FreeSolo&gt;, value: Value | AutocompleteFreeSoloValueMapping&lt;FreeSolo&gt;) =&gt; boolean"
       }
     },
     "multiple": { "type": { "name": "Multiple", "description": "Multiple" }, "default": "false" },
     "onChange": {
       "type": {
-        "name": "(event: React.SyntheticEvent, value: AutocompleteValue&lt;Value, Multiple, DisableClearable, FreeSolo&gt;, reason: AutocompleteChangeReason, details?: AutocompleteChangeDetails&lt;Value&gt;) =&gt; void",
-        "description": "(event: React.SyntheticEvent, value: AutocompleteValue&lt;Value, Multiple, DisableClearable, FreeSolo&gt;, reason: AutocompleteChangeReason, details?: AutocompleteChangeDetails&lt;Value&gt;) =&gt; void"
+        "name": "(event: React.SyntheticEvent, value: AutocompleteValue&lt;Value, Multiple, DisableClearable, FreeSolo&gt;, reason: AutocompleteChangeReason, details?: AutocompleteChangeDetails&lt;Value, FreeSolo&gt;) =&gt; void",
+        "description": "(event: React.SyntheticEvent, value: AutocompleteValue&lt;Value, Multiple, DisableClearable, FreeSolo&gt;, reason: AutocompleteChangeReason, details?: AutocompleteChangeDetails&lt;Value, FreeSolo&gt;) =&gt; void"
       }
     },
     "onClose": {
@@ -231,7 +231,10 @@
     "inputValue": { "type": { "name": "string", "description": "string" }, "required": true },
     "popupOpen": { "type": { "name": "boolean", "description": "boolean" }, "required": true },
     "setAnchorEl": {
-      "type": { "name": "() =&gt; void", "description": "() =&gt; void" },
+      "type": {
+        "name": "React.Dispatch&lt;React.SetStateAction&lt;HTMLElement | null&gt;&gt;",
+        "description": "React.Dispatch&lt;React.SetStateAction&lt;HTMLElement | null&gt;&gt;"
+      },
       "required": true
     },
     "value": {
@@ -243,7 +246,7 @@
     }
   },
   "name": "useAutocomplete",
-  "filename": "/packages/mui-base/src/useAutocomplete/useAutocomplete.js",
+  "filename": "/packages/mui-base/src/useAutocomplete/useAutocomplete.ts",
   "imports": [
     "import { useAutocomplete } from '@mui/base/useAutocomplete';",
     "import { useAutocomplete } from '@mui/base';"
