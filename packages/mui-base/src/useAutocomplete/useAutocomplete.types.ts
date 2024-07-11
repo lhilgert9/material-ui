@@ -21,10 +21,6 @@ export interface AutocompleteGroupedOption<Value = string> {
   options: Value[];
 }
 
-export function createFilterOptions<Value>(
-  config?: CreateFilterOptionsConfig<Value>,
-): (options: Value[], state: FilterOptionsState<Value>) => Value[];
-
 export type AutocompleteFreeSoloValueMapping<FreeSolo> = FreeSolo extends true ? string : never;
 
 export type AutocompleteValue<Value, Multiple, DisableClearable, FreeSolo> = Multiple extends true
@@ -212,7 +208,10 @@ export interface UseAutocompleteProps<
    * @param {Value} value The value to test against.
    * @returns {boolean}
    */
-  isOptionEqualToValue?: (option: Value, value: Value) => boolean;
+  isOptionEqualToValue?: (
+    option: Value | AutocompleteFreeSoloValueMapping<FreeSolo>,
+    value: Value | AutocompleteFreeSoloValueMapping<FreeSolo>,
+  ) => boolean;
   /**
    * If `true`, `value` must be an array and the menu will support multiple selections.
    * @default false
@@ -230,7 +229,7 @@ export interface UseAutocompleteProps<
     event: React.SyntheticEvent,
     value: AutocompleteValue<Value, Multiple, DisableClearable, FreeSolo>,
     reason: AutocompleteChangeReason,
-    details?: AutocompleteChangeDetails<Value>,
+    details?: AutocompleteChangeDetails<Value, FreeSolo>,
   ) => void;
   /**
    * Callback fired when the popup requests to be closed.
@@ -313,14 +312,19 @@ export interface UseAutocompleteParameters<
 
 export type AutocompleteHighlightChangeReason = 'keyboard' | 'mouse' | 'auto' | 'touch';
 
+export type AutocompleteChangeDirection = 'next' | 'previous';
+
 export type AutocompleteChangeReason =
   | 'createOption'
   | 'selectOption'
   | 'removeOption'
   | 'clear'
   | 'blur';
-export interface AutocompleteChangeDetails<Value = string> {
-  option: Value;
+export interface AutocompleteChangeDetails<
+  Value = string,
+  FreeSolo extends boolean | undefined = false,
+> {
+  option: Value | AutocompleteFreeSoloValueMapping<FreeSolo>;
 }
 export type AutocompleteCloseReason =
   | 'createOption'
@@ -337,24 +341,6 @@ export type AutocompleteGetTagProps = ({ index }: { index: number }) => {
   tabIndex: -1;
   onDelete: (event: any) => void;
 };
-/**
- *
- * Demos:
- *
- * - [Autocomplete](https://next.mui.com/base-ui/react-autocomplete/#hook)
- *
- * API:
- *
- * - [useAutocomplete API](https://next.mui.com/base-ui/react-autocomplete/hooks-api/#use-autocomplete)
- */
-export function useAutocomplete<
-  Value,
-  Multiple extends boolean | undefined = false,
-  DisableClearable extends boolean | undefined = false,
-  FreeSolo extends boolean | undefined = false,
->(
-  props: UseAutocompleteProps<Value, Multiple, DisableClearable, FreeSolo>,
-): UseAutocompleteReturnValue<Value, Multiple, DisableClearable, FreeSolo>;
 
 export interface UseAutocompleteRenderedOption<Value> {
   option: Value;
@@ -448,7 +434,7 @@ export interface UseAutocompleteReturnValue<
    * Setter for the component `anchorEl`.
    * @returns function for setting `anchorEl`
    */
-  setAnchorEl: () => void;
+  setAnchorEl: React.Dispatch<React.SetStateAction<HTMLElement | null>>;
   /**
    * Index of the focused tag for the component.
    */

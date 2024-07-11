@@ -8,13 +8,30 @@ import {
   unstable_useId as useId,
   usePreviousProps,
 } from '@mui/utils';
+import {
+  AutocompleteChangeDetails,
+  AutocompleteChangeDirection,
+  AutocompleteChangeReason,
+  AutocompleteCloseReason,
+  AutocompleteFreeSoloValueMapping,
+  AutocompleteGetTagProps,
+  AutocompleteGroupedOption,
+  AutocompleteHighlightChangeReason,
+  AutocompleteValue,
+  CreateFilterOptionsConfig,
+  FilterOptionsState,
+  UseAutocompleteProps,
+  UseAutocompleteReturnValue,
+} from './useAutocomplete.types';
+import { MuiCancellableEvent } from '../utils/MuiCancellableEvent';
 
 // https://stackoverflow.com/questions/990904/remove-accents-diacritics-in-a-string-in-javascript
-function stripDiacritics(string) {
+function stripDiacritics(string: string) {
   return string.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
-
-export function createFilterOptions(config = {}) {
+export function createFilterOptions<Value>(
+  config: CreateFilterOptionsConfig<Value> = {},
+): (options: Value[], state: FilterOptionsState<Value>) => Value[] {
   const {
     ignoreAccents = true,
     ignoreCase = true,
@@ -58,10 +75,27 @@ const defaultFilterOptions = createFilterOptions();
 // Number of options to jump in list box when `Page Up` and `Page Down` keys are used.
 const pageSize = 5;
 
-const defaultIsActiveElementInListbox = (listboxRef) =>
+const defaultIsActiveElementInListbox = (listboxRef: React.RefObject<HTMLElement>) =>
   listboxRef.current !== null && listboxRef.current.parentElement?.contains(document.activeElement);
 
-export function useAutocomplete(props) {
+/**
+ *
+ * Demos:
+ *
+ * - [Autocomplete](https://next.mui.com/base-ui/react-autocomplete/#hook)
+ *
+ * API:
+ *
+ * - [useAutocomplete API](https://next.mui.com/base-ui/react-autocomplete/hooks-api/#use-autocomplete)
+ */
+export function useAutocomplete<
+  Value,
+  Multiple extends boolean | undefined = false,
+  DisableClearable extends boolean | undefined = false,
+  FreeSolo extends boolean | undefined = false,
+>(
+  props: UseAutocompleteProps<Value, Multiple, DisableClearable, FreeSolo>,
+): UseAutocompleteReturnValue<Value, Multiple, DisableClearable, FreeSolo> {
   const {
     // eslint-disable-next-line @typescript-eslint/naming-convention
     unstable_isActiveElementInListbox = defaultIsActiveElementInListbox,
@@ -74,25 +108,33 @@ export function useAutocomplete(props) {
     clearOnBlur = !props.freeSolo,
     clearOnEscape = false,
     componentName = 'useAutocomplete',
-    defaultValue = props.multiple ? [] : null,
+    defaultValue = (props.multiple ? [] : null) as AutocompleteValue<
+      Value,
+      Multiple,
+      DisableClearable,
+      FreeSolo
+    >,
     disableClearable = false,
     disableCloseOnSelect = false,
     disabled: disabledProp,
     disabledItemsFocusable = false,
     disableListWrap = false,
-    filterOptions = defaultFilterOptions,
+    filterOptions = defaultFilterOptions as (
+      options: Value[],
+      state: FilterOptionsState<Value>,
+    ) => Value[],
     filterSelectedOptions = false,
     freeSolo = false,
     getOptionDisabled,
     getOptionKey,
-    getOptionLabel: getOptionLabelProp = (option) => option.label ?? option,
+    getOptionLabel: getOptionLabelProp = (option) => (option as { label: string }).label ?? option,
     groupBy,
     handleHomeEndKeys = !props.freeSolo,
     id: idProp,
     includeInputInList = false,
     inputValue: inputValueProp,
     isOptionEqualToValue = (option, value) => option === value,
-    multiple = false,
+    multiple,
     onChange,
     onClose,
     onHighlightChange,
@@ -106,7 +148,7 @@ export function useAutocomplete(props) {
     value: valueProp,
   } = props;
 
-  const id = useId(idProp);
+  const id = useId(idProp)!;
 
   let getOptionLabel = getOptionLabelProp;
 
@@ -129,9 +171,9 @@ export function useAutocomplete(props) {
 
   const ignoreFocus = React.useRef(false);
   const firstFocus = React.useRef(true);
-  const inputRef = React.useRef(null);
-  const listboxRef = React.useRef(null);
-  const [anchorEl, setAnchorEl] = React.useState(null);
+  const inputRef = React.useRef<HTMLInputElement>(null!);
+  const listboxRef = React.useRef<HTMLUListElement>(null!);
+  const [anchorEl, setAnchorEl] = React.useState<HTMLElement | null>(null);
 
   const [focusedTag, setFocusedTag] = React.useState(-1);
   const defaultHighlighted = autoHighlight ? 0 : -1;
@@ -152,10 +194,16 @@ export function useAutocomplete(props) {
   const [focused, setFocused] = React.useState(false);
 
   const resetInputValue = React.useCallback(
-    (event, newValue) => {
+    (
+      event: React.SyntheticEvent,
+      newValue: AutocompleteValue<Value, Multiple, DisableClearable, FreeSolo>,
+    ) => {
       // retain current `inputValue` if new option isn't selected and `clearOnBlur` is false
       // When `multiple` is enabled, `newValue` is an array of all selected items including the newly selected item
-      const isOptionSelected = multiple ? value.length < newValue.length : newValue !== null;
+      const isOptionSelected = multiple
+        ? (value as AutocompleteValue<Value, true, DisableClearable, FreeSolo>).length <
+          (newValue as AutocompleteValue<Value, true, DisableClearable, FreeSolo>).length
+        : newValue !== null;
       if (!isOptionSelected && !clearOnBlur) {
         return;
       }
@@ -165,7 +213,9 @@ export function useAutocomplete(props) {
       } else if (newValue == null) {
         newInputValue = '';
       } else {
-        const optionLabel = getOptionLabel(newValue);
+        const optionLabel = getOptionLabel(
+          newValue as NonNullable<AutocompleteValue<Value, false, DisableClearable, FreeSolo>>,
+        );
         newInputValue = typeof optionLabel === 'string' ? optionLabel : '';
       }
 
@@ -192,7 +242,12 @@ export function useAutocomplete(props) {
   const [inputPristine, setInputPristine] = React.useState(true);
 
   const inputValueIsSelectedValue =
-    !multiple && value != null && inputValue === getOptionLabel(value);
+    !multiple &&
+    value != null &&
+    inputValue ===
+      getOptionLabel(
+        value as NonNullable<AutocompleteValue<Value, false, DisableClearable, FreeSolo>>,
+      );
 
   const popupOpen = open && !readOnly;
 
@@ -201,9 +256,10 @@ export function useAutocomplete(props) {
         options.filter((option) => {
           if (
             filterSelectedOptions &&
-            (multiple ? value : [value]).some(
-              (value2) => value2 !== null && isOptionEqualToValue(option, value2),
-            )
+            (multiple
+              ? (value as AutocompleteValue<Value, true, DisableClearable, FreeSolo>)
+              : [value]
+            ).some((value2) => value2 !== null && isOptionEqualToValue(option, value2 as Value))
           ) {
             return false;
           }
@@ -236,15 +292,17 @@ export function useAutocomplete(props) {
       return;
     }
 
-    resetInputValue(null, value);
+    resetInputValue(null!, value);
   }, [value, resetInputValue, focused, previousProps.value, freeSolo]);
 
   const listboxAvailable = open && filteredOptions.length > 0 && !readOnly;
 
   if (process.env.NODE_ENV !== 'production') {
     if (value !== null && !freeSolo && options.length > 0) {
-      const missingValue = (multiple ? value : [value]).filter(
-        (value2) => !options.some((option) => isOptionEqualToValue(option, value2)),
+      const missingValue = (
+        multiple ? (value as AutocompleteValue<Value, true, DisableClearable, FreeSolo>) : [value]
+      ).filter(
+        (value2) => !options.some((option) => isOptionEqualToValue(option, value2 as Value)),
       );
 
       if (missingValue.length > 0) {
@@ -267,19 +325,22 @@ export function useAutocomplete(props) {
     if (tagToFocus === -1) {
       inputRef.current.focus();
     } else {
-      anchorEl.querySelector(`[data-tag-index="${tagToFocus}"]`).focus();
+      anchorEl?.querySelector<HTMLElement>(`[data-tag-index="${tagToFocus}"]`)?.focus();
     }
   });
 
   // Ensure the focusedTag is never inconsistent
   React.useEffect(() => {
-    if (multiple && focusedTag > value.length - 1) {
+    if (
+      multiple &&
+      focusedTag > (value as AutocompleteValue<Value, true, DisableClearable, FreeSolo>).length - 1
+    ) {
       setFocusedTag(-1);
       focusTag(-1);
     }
   }, [value, multiple, focusedTag, focusTag]);
 
-  function validOptionIndex(index, direction) {
+  function validOptionIndex(index: number, direction: AutocompleteChangeDirection) {
     if (!listboxRef.current || index < 0 || index >= filteredOptions.length) {
       return -1;
     }
@@ -287,7 +348,9 @@ export function useAutocomplete(props) {
     let nextFocus = index;
 
     while (true) {
-      const option = listboxRef.current.querySelector(`[data-option-index="${nextFocus}"]`);
+      const option = listboxRef.current.querySelector<HTMLLIElement & { disabled?: boolean }>(
+        `[data-option-index="${nextFocus}"]`,
+      );
 
       // Same logic as MenuList.js
       const nextFocusDisabled = disabledItemsFocusable
@@ -315,90 +378,112 @@ export function useAutocomplete(props) {
     }
   }
 
-  const setHighlightedIndex = useEventCallback(({ event, index, reason = 'auto' }) => {
-    highlightedIndexRef.current = index;
+  const setHighlightedIndex = useEventCallback(
+    ({
+      event,
+      index = -1,
+      reason = 'auto',
+    }: {
+      event?: React.SyntheticEvent;
+      index?: number;
+      reason?: AutocompleteHighlightChangeReason;
+    }) => {
+      highlightedIndexRef.current = index;
 
-    // does the index exist?
-    if (index === -1) {
-      inputRef.current.removeAttribute('aria-activedescendant');
-    } else {
-      inputRef.current.setAttribute('aria-activedescendant', `${id}-option-${index}`);
-    }
-
-    if (onHighlightChange) {
-      onHighlightChange(event, index === -1 ? null : filteredOptions[index], reason);
-    }
-
-    if (!listboxRef.current) {
-      return;
-    }
-
-    const prev = listboxRef.current.querySelector(
-      `[role="option"].${unstable_classNamePrefix}-focused`,
-    );
-    if (prev) {
-      prev.classList.remove(`${unstable_classNamePrefix}-focused`);
-      prev.classList.remove(`${unstable_classNamePrefix}-focusVisible`);
-    }
-
-    let listboxNode = listboxRef.current;
-    if (listboxRef.current.getAttribute('role') !== 'listbox') {
-      listboxNode = listboxRef.current.parentElement.querySelector('[role="listbox"]');
-    }
-
-    // "No results"
-    if (!listboxNode) {
-      return;
-    }
-
-    if (index === -1) {
-      listboxNode.scrollTop = 0;
-      return;
-    }
-
-    const option = listboxRef.current.querySelector(`[data-option-index="${index}"]`);
-
-    if (!option) {
-      return;
-    }
-
-    option.classList.add(`${unstable_classNamePrefix}-focused`);
-    if (reason === 'keyboard') {
-      option.classList.add(`${unstable_classNamePrefix}-focusVisible`);
-    }
-
-    // Scroll active descendant into view.
-    // Logic copied from https://www.w3.org/WAI/content-assets/wai-aria-practices/patterns/combobox/examples/js/select-only.js
-    // In case of mouse clicks and touch (in mobile devices) we avoid scrolling the element and keep both behaviors same.
-    // Consider this API instead once it has a better browser support:
-    // .scrollIntoView({ scrollMode: 'if-needed', block: 'nearest' });
-    if (
-      listboxNode.scrollHeight > listboxNode.clientHeight &&
-      reason !== 'mouse' &&
-      reason !== 'touch'
-    ) {
-      const element = option;
-
-      const scrollBottom = listboxNode.clientHeight + listboxNode.scrollTop;
-      const elementBottom = element.offsetTop + element.offsetHeight;
-      if (elementBottom > scrollBottom) {
-        listboxNode.scrollTop = elementBottom - listboxNode.clientHeight;
-      } else if (
-        element.offsetTop - element.offsetHeight * (groupBy ? 1.3 : 0) <
-        listboxNode.scrollTop
-      ) {
-        listboxNode.scrollTop = element.offsetTop - element.offsetHeight * (groupBy ? 1.3 : 0);
+      // does the index exist?
+      if (index === -1) {
+        inputRef.current.removeAttribute('aria-activedescendant');
+      } else {
+        inputRef.current.setAttribute('aria-activedescendant', `${id}-option-${index}`);
       }
-    }
-  });
+
+      if (onHighlightChange) {
+        onHighlightChange(event!, index === -1 ? null : filteredOptions[index], reason);
+      }
+
+      if (!listboxRef.current) {
+        return;
+      }
+
+      const prev = listboxRef.current.querySelector(
+        `[role="option"].${unstable_classNamePrefix}-focused`,
+      );
+      if (prev) {
+        prev.classList.remove(`${unstable_classNamePrefix}-focused`);
+        prev.classList.remove(`${unstable_classNamePrefix}-focusVisible`);
+      }
+
+      let listboxNode = listboxRef.current;
+      if (listboxRef.current.getAttribute('role') !== 'listbox') {
+        listboxNode = listboxRef.current!.parentElement?.querySelector('[role="listbox"]')!;
+      }
+
+      // "No results"
+      if (!listboxNode) {
+        return;
+      }
+
+      if (index === -1) {
+        listboxNode.scrollTop = 0;
+        return;
+      }
+
+      const option = listboxRef.current.querySelector<HTMLElement>(
+        `[data-option-index="${index}"]`,
+      );
+
+      if (!option) {
+        return;
+      }
+
+      option.classList.add(`${unstable_classNamePrefix}-focused`);
+      if (reason === 'keyboard') {
+        option.classList.add(`${unstable_classNamePrefix}-focusVisible`);
+      }
+
+      // Scroll active descendant into view.
+      // Logic copied from https://www.w3.org/WAI/content-assets/wai-aria-practices/patterns/combobox/examples/js/select-only.js
+      // In case of mouse clicks and touch (in mobile devices) we avoid scrolling the element and keep both behaviors same.
+      // Consider this API instead once it has a better browser support:
+      // .scrollIntoView({ scrollMode: 'if-needed', block: 'nearest' });
+      if (
+        listboxNode.scrollHeight > listboxNode.clientHeight &&
+        reason !== 'mouse' &&
+        reason !== 'touch'
+      ) {
+        const element = option;
+
+        const scrollBottom = listboxNode.clientHeight + listboxNode.scrollTop;
+        const elementBottom = element.offsetTop + element.offsetHeight;
+        if (elementBottom > scrollBottom) {
+          listboxNode.scrollTop = elementBottom - listboxNode.clientHeight;
+        } else if (
+          element.offsetTop - element.offsetHeight * (groupBy ? 1.3 : 0) <
+          listboxNode.scrollTop
+        ) {
+          listboxNode.scrollTop = element.offsetTop - element.offsetHeight * (groupBy ? 1.3 : 0);
+        }
+      }
+    },
+  );
 
   const changeHighlightedIndex = useEventCallback(
-    ({ event, diff, direction = 'next', reason = 'auto' }) => {
+    ({
+      event,
+      diff,
+      direction = 'next',
+      reason = 'auto',
+    }: {
+      event?: React.SyntheticEvent;
+      diff: 'reset' | 'start' | 'end' | number;
+      direction?: AutocompleteChangeDirection;
+      reason?: 'auto' | 'keyboard';
+    }) => {
       if (!popupOpen) {
         return;
       }
 
-      const getNextIndex = () => {
+      const getNextIndex = (): number => {
         const maxIndex = filteredOptions.length - 1;
 
         if (diff === 'reset') {
@@ -465,7 +550,10 @@ export function useAutocomplete(props) {
   );
 
   const getPreviousHighlightedOptionIndex = () => {
-    const isSameValue = (value1, value2) => {
+    const isSameValue = (
+      value1?: AutocompleteValue<Value, false, DisableClearable, FreeSolo>,
+      value2?: AutocompleteValue<Value, false, DisableClearable, FreeSolo>,
+    ) => {
       const label1 = value1 ? getOptionLabel(value1) : '';
       const label2 = value2 ? getOptionLabel(value2) : '';
       return label1 === label2;
@@ -477,9 +565,19 @@ export function useAutocomplete(props) {
       previousProps.filteredOptions.length !== filteredOptions.length &&
       previousProps.inputValue === inputValue &&
       (multiple
-        ? value.length === previousProps.value.length &&
-          previousProps.value.every((val, i) => getOptionLabel(value[i]) === getOptionLabel(val))
-        : isSameValue(previousProps.value, value))
+        ? (value as AutocompleteValue<Value, true, DisableClearable, FreeSolo>).length ===
+            (previousProps.value as AutocompleteValue<Value, true, DisableClearable, FreeSolo>)
+              .length &&
+          (previousProps.value as AutocompleteValue<Value, true, DisableClearable, FreeSolo>).every(
+            (val, i) =>
+              getOptionLabel(
+                (value as AutocompleteValue<Value, true, DisableClearable, FreeSolo>)[i],
+              ) === getOptionLabel(val),
+          )
+        : isSameValue(
+            previousProps.value as AutocompleteValue<Value, false, DisableClearable, FreeSolo>,
+            value as AutocompleteValue<Value, false, DisableClearable, FreeSolo>,
+          ))
     ) {
       const previousHighlightedOption = previousProps.filteredOptions[highlightedIndexRef.current];
 
@@ -505,7 +603,9 @@ export function useAutocomplete(props) {
       return;
     }
 
-    const valueItem = multiple ? value[0] : value;
+    const valueItem = (
+      multiple ? (value as AutocompleteValue<Value, true, DisableClearable, FreeSolo>)[0] : value
+    ) as AutocompleteValue<Value, false, DisableClearable, FreeSolo>;
 
     // The popup is empty, reset
     if (filteredOptions.length === 0 || valueItem == null) {
@@ -525,7 +625,9 @@ export function useAutocomplete(props) {
       if (
         multiple &&
         currentOption &&
-        value.findIndex((val) => isOptionEqualToValue(currentOption, val)) !== -1
+        (value as AutocompleteValue<Value, true, DisableClearable, FreeSolo>).findIndex((val) =>
+          isOptionEqualToValue(currentOption, val),
+        ) !== -1
       ) {
         return;
       }
@@ -608,7 +710,7 @@ export function useAutocomplete(props) {
     syncHighlightedIndex();
   }, [syncHighlightedIndex]);
 
-  const handleOpen = (event) => {
+  const handleOpen = (event: React.SyntheticEvent) => {
     if (open) {
       return;
     }
@@ -621,7 +723,7 @@ export function useAutocomplete(props) {
     }
   };
 
-  const handleClose = (event, reason) => {
+  const handleClose = (event: React.SyntheticEvent, reason: AutocompleteCloseReason) => {
     if (!open) {
       return;
     }
@@ -633,9 +735,21 @@ export function useAutocomplete(props) {
     }
   };
 
-  const handleValue = (event, newValue, reason, details) => {
+  const handleValue = (
+    event: React.SyntheticEvent,
+    newValue: AutocompleteValue<Value, Multiple, DisableClearable, FreeSolo>,
+    reason: AutocompleteChangeReason,
+    details?: AutocompleteChangeDetails<Value, FreeSolo>,
+  ) => {
     if (multiple) {
-      if (value.length === newValue.length && value.every((val, i) => val === newValue[i])) {
+      if (
+        (value as AutocompleteValue<Value, true, DisableClearable, FreeSolo>).length ===
+          (newValue as AutocompleteValue<Value, true, DisableClearable, FreeSolo>).length &&
+        (value as AutocompleteValue<Value, true, DisableClearable, FreeSolo>).every(
+          (val, i) =>
+            val === (newValue as AutocompleteValue<Value, true, DisableClearable, FreeSolo>)[i],
+        )
+      ) {
         return;
       }
     } else if (value === newValue) {
@@ -651,15 +765,27 @@ export function useAutocomplete(props) {
 
   const isTouch = React.useRef(false);
 
-  const selectNewValue = (event, option, reasonProp = 'selectOption', origin = 'options') => {
-    let reason = reasonProp;
-    let newValue = option;
+  const selectNewValue = (
+    event: React.SyntheticEvent,
+    option: Value | AutocompleteFreeSoloValueMapping<FreeSolo>,
+    reasonProp: AutocompleteChangeReason = 'selectOption',
+    origin: 'options' | 'freeSolo' = 'options',
+  ) => {
+    let reason: AutocompleteChangeReason | AutocompleteCloseReason = reasonProp;
+    let newValue: AutocompleteValue<Value, Multiple, DisableClearable, FreeSolo>;
 
     if (multiple) {
-      newValue = Array.isArray(value) ? value.slice() : [];
+      newValue = (Array.isArray(value) ? value.slice() : []) as AutocompleteValue<
+        Value,
+        Multiple,
+        DisableClearable,
+        FreeSolo
+      >;
 
       if (process.env.NODE_ENV !== 'production') {
-        const matches = newValue.filter((val) => isOptionEqualToValue(option, val));
+        const matches = (
+          newValue as AutocompleteValue<Value, true, DisableClearable, FreeSolo>
+        ).filter((val) => isOptionEqualToValue(option, val));
 
         if (matches.length > 1) {
           console.error(
@@ -671,21 +797,32 @@ export function useAutocomplete(props) {
         }
       }
 
-      const itemIndex = newValue.findIndex((valueItem) => isOptionEqualToValue(option, valueItem));
+      const itemIndex = (
+        newValue as AutocompleteValue<Value, true, DisableClearable, FreeSolo>
+      ).findIndex((valueItem) => isOptionEqualToValue(option, valueItem));
 
       if (itemIndex === -1) {
-        newValue.push(option);
+        (newValue as AutocompleteValue<Value, true, DisableClearable, FreeSolo>).push(option);
       } else if (origin !== 'freeSolo') {
-        newValue.splice(itemIndex, 1);
+        (newValue as AutocompleteValue<Value, true, DisableClearable, FreeSolo>).splice(
+          itemIndex,
+          1,
+        );
         reason = 'removeOption';
       }
+    } else {
+      newValue = option as AutocompleteValue<Value, Multiple, DisableClearable, FreeSolo>;
     }
 
     resetInputValue(event, newValue);
 
     handleValue(event, newValue, reason, { option });
-    if (!disableCloseOnSelect && (!event || (!event.ctrlKey && !event.metaKey))) {
-      handleClose(event, reason);
+    if (
+      !disableCloseOnSelect &&
+      (!event ||
+        (!(event as React.KeyboardEvent).ctrlKey && !(event as React.KeyboardEvent).metaKey))
+    ) {
+      handleClose(event, reason as AutocompleteCloseReason);
     }
 
     if (
@@ -697,7 +834,7 @@ export function useAutocomplete(props) {
     }
   };
 
-  function validTagIndex(index, direction) {
+  function validTagIndex(index: number, direction: AutocompleteChangeDirection) {
     if (index === -1) {
       return -1;
     }
@@ -707,13 +844,17 @@ export function useAutocomplete(props) {
     while (true) {
       // Out of range
       if (
-        (direction === 'next' && nextFocus === value.length) ||
+        (direction === 'next' &&
+          nextFocus ===
+            (value as AutocompleteValue<Value, true, DisableClearable, FreeSolo>).length) ||
         (direction === 'previous' && nextFocus === -1)
       ) {
         return -1;
       }
 
-      const option = anchorEl.querySelector(`[data-tag-index="${nextFocus}"]`);
+      const option = anchorEl?.querySelector<HTMLElement & { disabled?: boolean }>(
+        `[data-tag-index="${nextFocus}"]`,
+      );
 
       // Same logic as MenuList.js
       if (
@@ -729,7 +870,7 @@ export function useAutocomplete(props) {
     }
   }
 
-  const handleFocusTag = (event, direction) => {
+  const handleFocusTag = (event: any, direction: AutocompleteChangeDirection) => {
     if (!multiple) {
       return;
     }
@@ -742,7 +883,7 @@ export function useAutocomplete(props) {
 
     if (focusedTag === -1) {
       if (inputValue === '' && direction === 'previous') {
-        nextTag = value.length - 1;
+        nextTag = (value as AutocompleteValue<Value, true, DisableClearable, FreeSolo>).length - 1;
       }
     } else {
       nextTag += direction === 'next' ? 1 : -1;
@@ -751,7 +892,9 @@ export function useAutocomplete(props) {
         nextTag = 0;
       }
 
-      if (nextTag === value.length) {
+      if (
+        nextTag === (value as AutocompleteValue<Value, true, DisableClearable, FreeSolo>).length
+      ) {
         nextTag = -1;
       }
     }
@@ -762,7 +905,7 @@ export function useAutocomplete(props) {
     focusTag(nextTag);
   };
 
-  const handleClear = (event) => {
+  const handleClear = (event: React.SyntheticEvent) => {
     ignoreFocus.current = true;
     setInputValueState('');
 
@@ -770,152 +913,209 @@ export function useAutocomplete(props) {
       onInputChange(event, '', 'clear');
     }
 
-    handleValue(event, multiple ? [] : null, 'clear');
+    handleValue(
+      event,
+      (multiple ? [] : null) as AutocompleteValue<Value, Multiple, DisableClearable, FreeSolo>,
+      'clear',
+    );
   };
 
-  const handleKeyDown = (other) => (event) => {
-    if (other.onKeyDown) {
-      other.onKeyDown(event);
-    }
+  const handleKeyDown =
+    (other: any) => (event: React.KeyboardEvent<HTMLInputElement> & MuiCancellableEvent) => {
+      if (other.onKeyDown) {
+        other.onKeyDown(event);
+      }
 
-    if (event.defaultMuiPrevented) {
-      return;
-    }
+      if (event.defaultMuiPrevented) {
+        return;
+      }
 
-    if (focusedTag !== -1 && ['ArrowLeft', 'ArrowRight'].indexOf(event.key) === -1) {
-      setFocusedTag(-1);
-      focusTag(-1);
-    }
+      if (focusedTag !== -1 && ['ArrowLeft', 'ArrowRight'].indexOf(event.key) === -1) {
+        setFocusedTag(-1);
+        focusTag(-1);
+      }
 
-    // Wait until IME is settled.
-    if (event.which !== 229) {
-      switch (event.key) {
-        case 'Home':
-          if (popupOpen && handleHomeEndKeys) {
-            // Prevent scroll of the page
-            event.preventDefault();
-            changeHighlightedIndex({ diff: 'start', direction: 'next', reason: 'keyboard', event });
-          }
-          break;
-        case 'End':
-          if (popupOpen && handleHomeEndKeys) {
+      // Wait until IME is settled.
+      if (event.which !== 229) {
+        switch (event.key) {
+          case 'Home':
+            if (popupOpen && handleHomeEndKeys) {
+              // Prevent scroll of the page
+              event.preventDefault();
+              changeHighlightedIndex({
+                diff: 'start',
+                direction: 'next',
+                reason: 'keyboard',
+                event,
+              });
+            }
+            break;
+          case 'End':
+            if (popupOpen && handleHomeEndKeys) {
+              // Prevent scroll of the page
+              event.preventDefault();
+              changeHighlightedIndex({
+                diff: 'end',
+                direction: 'previous',
+                reason: 'keyboard',
+                event,
+              });
+            }
+            break;
+          case 'PageUp':
             // Prevent scroll of the page
             event.preventDefault();
             changeHighlightedIndex({
-              diff: 'end',
+              diff: -pageSize,
               direction: 'previous',
               reason: 'keyboard',
               event,
             });
-          }
-          break;
-        case 'PageUp':
-          // Prevent scroll of the page
-          event.preventDefault();
-          changeHighlightedIndex({
-            diff: -pageSize,
-            direction: 'previous',
-            reason: 'keyboard',
-            event,
-          });
-          handleOpen(event);
-          break;
-        case 'PageDown':
-          // Prevent scroll of the page
-          event.preventDefault();
-          changeHighlightedIndex({ diff: pageSize, direction: 'next', reason: 'keyboard', event });
-          handleOpen(event);
-          break;
-        case 'ArrowDown':
-          // Prevent cursor move
-          event.preventDefault();
-          changeHighlightedIndex({ diff: 1, direction: 'next', reason: 'keyboard', event });
-          handleOpen(event);
-          break;
-        case 'ArrowUp':
-          // Prevent cursor move
-          event.preventDefault();
-          changeHighlightedIndex({ diff: -1, direction: 'previous', reason: 'keyboard', event });
-          handleOpen(event);
-          break;
-        case 'ArrowLeft':
-          handleFocusTag(event, 'previous');
-          break;
-        case 'ArrowRight':
-          handleFocusTag(event, 'next');
-          break;
-        case 'Enter':
-          if (highlightedIndexRef.current !== -1 && popupOpen) {
-            const option = filteredOptions[highlightedIndexRef.current];
-            const disabled = getOptionDisabled ? getOptionDisabled(option) : false;
-
-            // Avoid early form validation, let the end-users continue filling the form.
+            handleOpen(event);
+            break;
+          case 'PageDown':
+            // Prevent scroll of the page
             event.preventDefault();
+            changeHighlightedIndex({
+              diff: pageSize,
+              direction: 'next',
+              reason: 'keyboard',
+              event,
+            });
+            handleOpen(event);
+            break;
+          case 'ArrowDown':
+            // Prevent cursor move
+            event.preventDefault();
+            changeHighlightedIndex({ diff: 1, direction: 'next', reason: 'keyboard', event });
+            handleOpen(event);
+            break;
+          case 'ArrowUp':
+            // Prevent cursor move
+            event.preventDefault();
+            changeHighlightedIndex({ diff: -1, direction: 'previous', reason: 'keyboard', event });
+            handleOpen(event);
+            break;
+          case 'ArrowLeft':
+            handleFocusTag(event, 'previous');
+            break;
+          case 'ArrowRight':
+            handleFocusTag(event, 'next');
+            break;
+          case 'Enter':
+            if (highlightedIndexRef.current !== -1 && popupOpen) {
+              const option = filteredOptions[highlightedIndexRef.current];
+              const disabled = getOptionDisabled ? getOptionDisabled(option) : false;
 
-            if (disabled) {
-              return;
-            }
+              // Avoid early form validation, let the end-users continue filling the form.
+              event.preventDefault();
 
-            selectNewValue(event, option, 'selectOption');
+              if (disabled) {
+                return;
+              }
 
-            // Move the selection to the end.
-            if (autoComplete) {
-              inputRef.current.setSelectionRange(
-                inputRef.current.value.length,
-                inputRef.current.value.length,
+              selectNewValue(event, option, 'selectOption');
+
+              // Move the selection to the end.
+              if (autoComplete) {
+                inputRef.current.setSelectionRange(
+                  inputRef.current.value.length,
+                  inputRef.current.value.length,
+                );
+              }
+            } else if (freeSolo && inputValue !== '' && inputValueIsSelectedValue === false) {
+              if (multiple) {
+                // Allow people to add new values before they submit the form.
+                event.preventDefault();
+              }
+              selectNewValue(
+                event,
+                inputValue as AutocompleteFreeSoloValueMapping<FreeSolo>,
+                'createOption',
+                'freeSolo',
               );
             }
-          } else if (freeSolo && inputValue !== '' && inputValueIsSelectedValue === false) {
-            if (multiple) {
-              // Allow people to add new values before they submit the form.
+            break;
+          case 'Escape':
+            if (popupOpen) {
+              // Avoid Opera to exit fullscreen mode.
               event.preventDefault();
+              // Avoid the Modal to handle the event.
+              event.stopPropagation();
+              handleClose(event, 'escape');
+            } else if (
+              clearOnEscape &&
+              (inputValue !== '' ||
+                (multiple &&
+                  (value as AutocompleteValue<Value, true, DisableClearable, FreeSolo>).length > 0))
+            ) {
+              // Avoid Opera to exit fullscreen mode.
+              event.preventDefault();
+              // Avoid the Modal to handle the event.
+              event.stopPropagation();
+              handleClear(event);
             }
-            selectNewValue(event, inputValue, 'createOption', 'freeSolo');
-          }
-          break;
-        case 'Escape':
-          if (popupOpen) {
-            // Avoid Opera to exit fullscreen mode.
-            event.preventDefault();
-            // Avoid the Modal to handle the event.
-            event.stopPropagation();
-            handleClose(event, 'escape');
-          } else if (clearOnEscape && (inputValue !== '' || (multiple && value.length > 0))) {
-            // Avoid Opera to exit fullscreen mode.
-            event.preventDefault();
-            // Avoid the Modal to handle the event.
-            event.stopPropagation();
-            handleClear(event);
-          }
-          break;
-        case 'Backspace':
-          // Remove the value on the left of the "cursor"
-          if (multiple && !readOnly && inputValue === '' && value.length > 0) {
-            const index = focusedTag === -1 ? value.length - 1 : focusedTag;
-            const newValue = value.slice();
-            newValue.splice(index, 1);
-            handleValue(event, newValue, 'removeOption', {
-              option: value[index],
-            });
-          }
-          break;
-        case 'Delete':
-          // Remove the value on the right of the "cursor"
-          if (multiple && !readOnly && inputValue === '' && value.length > 0 && focusedTag !== -1) {
-            const index = focusedTag;
-            const newValue = value.slice();
-            newValue.splice(index, 1);
-            handleValue(event, newValue, 'removeOption', {
-              option: value[index],
-            });
-          }
-          break;
-        default:
+            break;
+          case 'Backspace':
+            // Remove the value on the left of the "cursor"
+            if (
+              multiple &&
+              !readOnly &&
+              inputValue === '' &&
+              (value as AutocompleteValue<Value, true, DisableClearable, FreeSolo>).length > 0
+            ) {
+              const index =
+                focusedTag === -1
+                  ? (value as AutocompleteValue<Value, true, DisableClearable, FreeSolo>).length - 1
+                  : focusedTag;
+              const newValue = (
+                value as AutocompleteValue<Value, true, DisableClearable, FreeSolo>
+              ).slice();
+              newValue.splice(index, 1);
+              handleValue(
+                event,
+                newValue as AutocompleteValue<Value, Multiple, DisableClearable, FreeSolo>,
+                'removeOption',
+                {
+                  option: (value as AutocompleteValue<Value, true, DisableClearable, FreeSolo>)[
+                    index
+                  ],
+                },
+              );
+            }
+            break;
+          case 'Delete':
+            // Remove the value on the right of the "cursor"
+            if (
+              multiple &&
+              !readOnly &&
+              inputValue === '' &&
+              (value as AutocompleteValue<Value, true, DisableClearable, FreeSolo>).length > 0 &&
+              focusedTag !== -1
+            ) {
+              const index = focusedTag;
+              const newValue = (
+                value as AutocompleteValue<Value, true, DisableClearable, FreeSolo>
+              ).slice();
+              newValue.splice(index, 1);
+              handleValue(
+                event,
+                newValue as AutocompleteValue<Value, Multiple, DisableClearable, FreeSolo>,
+                'removeOption',
+                {
+                  option: (value as AutocompleteValue<Value, true, DisableClearable, FreeSolo>)[
+                    index
+                  ],
+                },
+              );
+            }
+            break;
+          default:
+        }
       }
-    }
-  };
+    };
 
-  const handleFocus = (event) => {
+  const handleFocus = (event: React.SyntheticEvent) => {
     setFocused(true);
 
     if (openOnFocus && !ignoreFocus.current) {
@@ -923,7 +1123,7 @@ export function useAutocomplete(props) {
     }
   };
 
-  const handleBlur = (event) => {
+  const handleBlur = (event?: React.FocusEvent) => {
     // Ignore the event when using the scrollbar with IE11
     if (unstable_isActiveElementInListbox(listboxRef)) {
       inputRef.current.focus();
@@ -935,17 +1135,22 @@ export function useAutocomplete(props) {
     ignoreFocus.current = false;
 
     if (autoSelect && highlightedIndexRef.current !== -1 && popupOpen) {
-      selectNewValue(event, filteredOptions[highlightedIndexRef.current], 'blur');
+      selectNewValue(event!, filteredOptions[highlightedIndexRef.current], 'blur');
     } else if (autoSelect && freeSolo && inputValue !== '') {
-      selectNewValue(event, inputValue, 'blur', 'freeSolo');
+      selectNewValue(
+        event!,
+        inputValue as AutocompleteFreeSoloValueMapping<FreeSolo>,
+        'blur',
+        'freeSolo',
+      );
     } else if (clearOnBlur) {
-      resetInputValue(event, value);
+      resetInputValue(event!, value);
     }
 
-    handleClose(event, 'blur');
+    handleClose(event!, 'blur');
   };
 
-  const handleInputChange = (event) => {
+  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = event.target.value;
 
     if (inputValue !== newValue) {
@@ -959,14 +1164,18 @@ export function useAutocomplete(props) {
 
     if (newValue === '') {
       if (!disableClearable && !multiple) {
-        handleValue(event, null, 'clear');
+        handleValue(
+          event,
+          null as AutocompleteValue<Value, Multiple, DisableClearable, FreeSolo>,
+          'clear',
+        );
       }
     } else {
       handleOpen(event);
     }
   };
 
-  const handleOptionMouseMove = (event) => {
+  const handleOptionMouseMove = (event: React.MouseEvent) => {
     const index = Number(event.currentTarget.getAttribute('data-option-index'));
     if (highlightedIndexRef.current !== index) {
       setHighlightedIndex({
@@ -977,7 +1186,7 @@ export function useAutocomplete(props) {
     }
   };
 
-  const handleOptionTouchStart = (event) => {
+  const handleOptionTouchStart = (event: React.TouchEvent) => {
     setHighlightedIndex({
       event,
       index: Number(event.currentTarget.getAttribute('data-option-index')),
@@ -986,22 +1195,27 @@ export function useAutocomplete(props) {
     isTouch.current = true;
   };
 
-  const handleOptionClick = (event) => {
+  const handleOptionClick = (event: React.MouseEvent) => {
     const index = Number(event.currentTarget.getAttribute('data-option-index'));
     selectNewValue(event, filteredOptions[index], 'selectOption');
 
     isTouch.current = false;
   };
 
-  const handleTagDelete = (index) => (event) => {
-    const newValue = value.slice();
+  const handleTagDelete = (index: number) => (event: React.SyntheticEvent) => {
+    const newValue = (value as AutocompleteValue<Value, true, DisableClearable, FreeSolo>).slice();
     newValue.splice(index, 1);
-    handleValue(event, newValue, 'removeOption', {
-      option: value[index],
-    });
+    handleValue(
+      event,
+      newValue as AutocompleteValue<Value, Multiple, DisableClearable, FreeSolo>,
+      'removeOption',
+      {
+        option: (value as AutocompleteValue<Value, true, DisableClearable, FreeSolo>)[index],
+      },
+    );
   };
 
-  const handlePopupIndicator = (event) => {
+  const handlePopupIndicator = (event: React.SyntheticEvent) => {
     if (open) {
       handleClose(event, 'toggleInput');
     } else {
@@ -1010,7 +1224,7 @@ export function useAutocomplete(props) {
   };
 
   // Prevent input blur when interacting with the combobox
-  const handleMouseDown = (event) => {
+  const handleMouseDown = (event: any) => {
     // Prevent focusing the input if click is anywhere outside the Autocomplete
     if (!event.currentTarget.contains(event.target)) {
       return;
@@ -1021,7 +1235,7 @@ export function useAutocomplete(props) {
   };
 
   // Focus the input when interacting with the combobox
-  const handleClick = (event) => {
+  const handleClick = (event: any) => {
     // Prevent focusing the input if click is anywhere outside the Autocomplete
     if (!event.currentTarget.contains(event.target)) {
       return;
@@ -1031,7 +1245,7 @@ export function useAutocomplete(props) {
     if (
       selectOnFocus &&
       firstFocus.current &&
-      inputRef.current.selectionEnd - inputRef.current.selectionStart === 0
+      inputRef.current.selectionEnd! - inputRef.current.selectionStart! === 0
     ) {
       inputRef.current.select();
     }
@@ -1039,19 +1253,23 @@ export function useAutocomplete(props) {
     firstFocus.current = false;
   };
 
-  const handleInputMouseDown = (event) => {
+  const handleInputMouseDown = (event: React.MouseEvent) => {
     if (!disabledProp && (inputValue === '' || !open)) {
       handlePopupIndicator(event);
     }
   };
 
   let dirty = freeSolo && inputValue.length > 0;
-  dirty = dirty || (multiple ? value.length > 0 : value !== null);
+  dirty =
+    dirty ||
+    (multiple
+      ? (value as AutocompleteValue<Value, true, DisableClearable, FreeSolo>).length > 0
+      : value !== null);
 
-  let groupedOptions = filteredOptions;
+  let groupedOptions: Value[] | AutocompleteGroupedOption<Value>[] = filteredOptions;
   if (groupBy) {
     // used to keep track of key and indexes in the result array
-    const indexBy = new Map();
+    const indexBy = new Map<string, boolean>();
     let warn = false;
 
     groupedOptions = filteredOptions.reduce((acc, option, index) => {
@@ -1080,7 +1298,7 @@ export function useAutocomplete(props) {
       }
 
       return acc;
-    }, []);
+    }, [] as AutocompleteGroupedOption<Value>[]);
   }
 
   if (disabledProp && focused) {
@@ -1108,7 +1326,7 @@ export function useAutocomplete(props) {
       onMouseDown: handleInputMouseDown,
       // if open then this is handled imperatively so don't let react override
       // only have an opinion about this when closed
-      'aria-activedescendant': popupOpen ? '' : null,
+      'aria-activedescendant': popupOpen ? '' : undefined,
       'aria-autocomplete': autoComplete ? 'both' : 'list',
       'aria-controls': listboxAvailable ? `${id}-listbox` : undefined,
       'aria-expanded': listboxAvailable,
@@ -1131,12 +1349,12 @@ export function useAutocomplete(props) {
       type: 'button',
       onClick: handlePopupIndicator,
     }),
-    getTagProps: ({ index }) => ({
+    getTagProps: (({ index }) => ({
       key: index,
       'data-tag-index': index,
       tabIndex: -1,
       ...(!readOnly && { onDelete: handleTagDelete(index) }),
-    }),
+    })) as AutocompleteGetTagProps,
     getListboxProps: () => ({
       role: 'listbox',
       id: `${id}-listbox`,
@@ -1148,9 +1366,9 @@ export function useAutocomplete(props) {
       },
     }),
     getOptionProps: ({ index, option }) => {
-      const selected = (multiple ? value : [value]).some(
-        (value2) => value2 != null && isOptionEqualToValue(option, value2),
-      );
+      const selected = (
+        multiple ? (value as AutocompleteValue<Value, true, DisableClearable, FreeSolo>) : [value]
+      ).some((value2) => value2 != null && isOptionEqualToValue(option, value2 as Value));
       const disabled = getOptionDisabled ? getOptionDisabled(option) : false;
 
       return {
@@ -1170,7 +1388,7 @@ export function useAutocomplete(props) {
     inputValue,
     value,
     dirty,
-    expanded: popupOpen && anchorEl,
+    expanded: Boolean(popupOpen && anchorEl),
     popupOpen,
     focused: focused || focusedTag !== -1,
     anchorEl,
